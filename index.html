@@ -81,17 +81,24 @@
 (function () {
   'use strict';
   var SECTIONS = [
-    { id: 'vision-models',          group: 'Frinks Vision',      label: 'Model Selection',            file: 'vision-model-selection.html?state=create' },
+    { id: 'vision-models',          group: 'Frinks Vision',       label: 'Model Selection',            file: 'vision-model-selection.html?state=create' },
     { id: 'vision-instances',       label: 'Instance table',             file: 'vision-instances.html?state=models-remaining' },
-    { id: 'edge-upload',            group: 'Frinks Edge',        label: 'Upload configuration',       file: 'edge-instances.html?state=upload' },
+    { id: 'edge-upload',            group: 'Frinks Edge',         label: 'Upload configuration',       file: 'edge-instances.html?state=upload' },
     { id: 'edge-instance',          label: 'Instance page',              file: 'edge-instance-detail.html?state=no-models' },
-    { id: 'edge-dashboard',         label: 'Default dashboard',          file: 'edge-dashboard.html?state=default' },
+    { id: 'edge-dashboard',         label: 'Dashboard Builder',          file: 'edge-dashboard.html?state=default&view=list' },
     { id: 'edge-emc',               label: 'Edit Module Configurations', file: 'edge-emc.html?state=odc' },
     { id: 'edge-deploy',            label: 'Deploy',                     file: 'edge-deploy.html?state=no-models' },
-    { id: 'vision-add-models',      group: 'Vision: add models', label: 'Add models',                 file: 'vision-model-selection.html?state=edit' },
+    { id: 'vision-some-models',     group: 'Vision: some models', label: 'Add some models',            file: 'vision-model-selection.html?state=edit-some' },
+    { id: 'vision-download-some',   label: 'Download',                   file: 'vision-instances.html?state=some-models' },
+    { id: 'edge-upload-some',       group: 'Edge: some models',   label: 'Upload some models',         file: 'edge-instances.html?state=some-models' },
+    { id: 'edge-emc-some',          label: 'Thresholds',                 file: 'edge-emc.html?state=odc&models=some' },
+    { id: 'edge-test-some',         label: 'Edge testing',               file: 'edge-instance-detail.html?state=some-models&tab=testing' },
+    { id: 'vision-add-models',      group: 'Vision: all models',  label: 'Add remaining models',       file: 'vision-model-selection.html?state=edit' },
     { id: 'vision-download-models', label: 'Download models',            file: 'vision-instances.html?state=completed' },
-    { id: 'edge-add-models',        group: 'Edge: add models',   label: 'Upload models',              file: 'edge-instances.html?state=models' },
-    { id: 'edge-ready',             label: 'Ready to deploy',            file: 'edge-deploy.html?state=ready' }
+    { id: 'edge-add-models',        group: 'Edge: all models',    label: 'Upload models',              file: 'edge-instances.html?state=models' },
+    { id: 'edge-ready',             label: 'Ready to deploy',            file: 'edge-deploy.html?state=ready' },
+    { id: 'edge-reupload-config',   group: 'Edge: re-upload',     label: 'Re-upload configuration',    file: 'edge-instances.html?state=reupload-config' },
+    { id: 'edge-reupload-full',     label: 'Re-upload complete',         file: 'edge-instances.html?state=reupload-full' }
   ];
   var INDEX = {};
   SECTIONS.forEach(function (s, i) { INDEX[s.id] = i; });

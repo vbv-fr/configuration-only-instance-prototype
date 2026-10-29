@@ -362,6 +362,9 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   var STATES = { odc: ['c1', 'm-odc'], ocr: ['c1', 'm-ocr'], code: ['c1', 'm-code'], bead: ['c2', 'm-bead'], seg: ['c2', 'm-seg'] };
   var stateKey = STATES[params.get('state')] ? params.get('state') : 'odc';
   var openParam = params.get('open');
+  // models=some: the intermediate stage (Part Presence and Label Text have models, Seal Bead and Surface Check not yet); models=all: every module.
+  var modelsParam = ['some', 'all'].indexOf(params.get('models')) >= 0 ? params.get('models') : null;
+  var SOME_MODELS = { 'm-odc': true, 'm-ocr': true };
 
   var KEY = 'cfgonly-state';
   var SHARED_DEFAULTS = { instanceName: 'Line 3 Assembly', instanceId: 'ab677d65-aa67-4bd2-a967-7a3fa86778ac', edgeVersion: null, configDownloaded: false,
@@ -404,8 +407,15 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     return [{ id: 'line2', name: 'Line 2 Assembly - Sample Project - Plant A' },
       { id: 'line3', name: (shared.instanceName || 'Line 3 Assembly') + ' - Sample Project - Plant A' }];
   }
-  // Line 2 Assembly is complete; Line 3 Assembly has models only once they are uploaded (after the change).
-  function hasModels() { return sel.inst === 'line2' || (mode === 'after' && !!shared.modelsUploaded); }
+  // Line 2 Assembly is complete. Line 3 Assembly (after the change): no models, some models (models=some), or all
+  // (models=all, or the models package uploaded in the flow).
+  function hasModels(mid) {
+    mid = mid || sel.mod;
+    if (sel.inst === 'line2') return true;
+    if (mode !== 'after') return false;
+    if (shared.modelsUploaded || modelsParam === 'all') return true;
+    return modelsParam === 'some' && !!SOME_MODELS[mid];
+  }
   function locked() { return mode === 'after' && !hasModels(); }
 
   function moduleById(id) {
@@ -414,7 +424,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     return null;
   }
   function seed(mid) {
-    var m = moduleById(mid), wm = hasModels();
+    var m = moduleById(mid), wm = hasModels(mid);
     if (m.store === 'assembly') {
       var cl = [
         { id: 'cls-bolt', name: 'Bolt', groundTruth: { operator: 0, count: [4, 4] } },
@@ -437,7 +447,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     if (m.store === 'ocr') {
       return { readingMode: 1, combine: false, detectionType: 9, angleGtEnabled: true, angle: [-10, 10],
         info: [{ id: 'lb-1', labelName: 'Part Number', gtText: 'PN-4471-A' }, { id: 'lb-2', labelName: 'Batch Code', gtText: 'B2710' }],
-        th: wm ? { det: 0.5, rec: 0.5 } : {} };
+        th: wm ? { det: 0.7, rec: 0.7 } : {} };
     }
     if (m.store === 'codeReader') return { match: true, matchType: 0, gtString: 'LN3-ASSY-0001' };
     if (m.store === 'beadInspection') {
@@ -1243,7 +1253,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     render();
     toast('Changes saved');
     toast('Module Configuration updated and deployment reloaded.');
-    setTimeout(function () { nav('edge-deploy'); }, 1200);
+    setTimeout(function () { nav(modelsParam === 'some' ? 'edge-test-some' : 'edge-deploy'); }, 1200);
   }
 
   // ---------- Modals ----------

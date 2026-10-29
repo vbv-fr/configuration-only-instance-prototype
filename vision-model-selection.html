@@ -347,7 +347,7 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
           <div class="foot-l">
             <div class="btn-tt" data-tip="Go back to the previous step."><button class="btn border" type="button" id="wzBack">Back</button></div>
             <div class="btn-tt" id="wzNextTip" data-tip="Continue to the next step."><button class="btn" type="button" id="wzNext">Next</button></div>
-            <div class="btn-tt" id="wzLaterTip" data-tip="Finish this instance now and download its configuration. Add the models later." hidden><button class="btn border" type="button" id="wzLater">Add models later &amp; download</button></div>
+            <div class="btn-tt" id="wzLaterTip" data-tip="" hidden><button class="btn border" type="button" id="wzLater">Finish without models</button></div>
           </div>
           <div class="btn-tt" data-tip="Close this drawer without creating the instance."><button class="btn border" type="button" id="wzCancel">Cancel</button></div>
         </div>
@@ -392,7 +392,7 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
   var KEY = 'cfgonly-state';
   var DEFAULTS = { instanceName: 'Line 3 Assembly', instanceId: 'ab677d65-aa67-4bd2-a967-7a3fa86778ac', edgeVersion: null,
     configDownloaded: false, configUploaded: false, modelsSelected: false,
-    modelsDownloaded: false, modelsUploaded: false };
+    modelsDownloaded: false, modelsUploaded: false, someSelected: false, someDownloaded: false, someUploaded: false };
   function readState(){
     var s = {}; for (var k in DEFAULTS) s[k] = DEFAULTS[k];
     try { var raw = localStorage.getItem(KEY); if (raw) { var o = JSON.parse(raw); if (o && typeof o === 'object') for (var j in o) s[j] = o[j]; } } catch (_) {}
@@ -441,7 +441,7 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     scripts: "The Edge Version this instance was last downloaded for. The machine must match, or the package won't load.",
     chipDraft: "Never activated, or invalidated by a config change. Can't be downloaded.",
     unplaced: 'This instance has no plant and team yet. An Org Admin must assign them.',
-    stRemaining: 'Finished, but at least one AI module has no model yet. Downloads as Configuration only. Add the models from Edit.',
+    stRemaining: 'Finished, but at least one AI module has no model yet. Add the models from Edit instance.',
     stCompleted: 'Every AI module has a model. Downloads the full instance.',
     stepBasic: 'Names the deployment and decides who can manage it. Plant and Team control which users see and download this instance.',
     instanceName: 'Must be unique within the project. This is what appears on the edge machine.',
@@ -452,7 +452,10 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     selFiles: 'Downloads only what changed — database, masks or specific models — instead of the full package.',
     dbFile: "The instance's database file. Select it when the instance's configuration has changed since the last download.",
     sbv: 'Chooses which version of the edge scripts bundle gets packaged into this instance download.',
-    pkg: "The instance's configuration, without models. Add the models later from Edit instance, then download them as a models update."
+    finNone: 'Save this instance without models. It stays Models Remaining until every AI module has a model.',
+    finSome: 'Save this instance with the models picked so far. It stays Models Remaining until every AI module has a model.',
+    dlNone: "Download the instance's configuration, without models.",
+    dlSome: 'Download the instance with the models picked so far.'
   };
 
   /* ---------- sample data ---------- */
@@ -492,20 +495,27 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
   ];
 
   /* ---------- page model ---------- */
+  var FIRST = ['m1', 'm2-det', 'm2-rec'];               // Part Presence + Label Text (stage "some models")
+  var ALL_KEYS = ALL_SLOTS.map(function(s){ return s.key; });
+  function slotByKey(k){ for (var i = 0; i < ALL_SLOTS.length; i++) if (ALL_SLOTS[i].key === k) return ALL_SLOTS[i]; return null; }
+  /* models saved on Line 3 (module_model_instance_mapper rows with a model) */
+  OURS.saved = PAGE === 'instances'
+    ? (state === 'completed' ? ALL_KEYS.slice() : state === 'some-models' ? FIRST.slice() : [])
+    : (state === 'edit' ? FIRST.slice() : []);
+  function statusFor(saved){ return saved.length === ALL_KEYS.length ? 'completed' : 'remaining'; }
+  OURS.status = statusFor(OURS.saved);
   var rows;
-  if (PAGE === 'instances') { OURS.status = state === 'completed' ? 'completed' : 'remaining'; rows = [OURS, LINE2, LINE1]; }
-  else if (state === 'edit') { OURS.status = 'remaining'; rows = [OURS, LINE2, LINE1]; }
+  if (PAGE === 'instances' || state === 'edit' || state === 'edit-some') { rows = [OURS, LINE2, LINE1]; }
   else { rows = [LINE2, LINE1]; }                     // list fetched before the drawer opened
 
   function ours(){ OURS.name = S.instanceName; OURS.id = uuidFrom(S.instanceId); return OURS; }
   function oursScripts(){
     if (S.edgeVersion) return S.edgeVersion;
-    if (state === 'completed' || state === 'edit') return FALLBACK_EDGE;
+    if (state !== 'models-remaining' && state !== 'create') return FALLBACK_EDGE;   // configuration downloaded earlier in the story
     return '-';
   }
   function oursModels(){
-    if (OURS.status !== 'completed') return [];
-    return ALL_SLOTS.map(function(s){ return s.model.name; });
+    return ALL_KEYS.filter(function(k){ return OURS.saved.indexOf(k) >= 0; }).map(function(k){ return slotByKey(k).model.name; });
   }
   function rowName(r){ return r.key === 'ours' ? ours().name : r.name; }
   function rowId(r){ return r.key === 'ours' ? ours().id : r.id; }
@@ -559,7 +569,7 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
       else {
         dl = '<div class="dl-cell" data-download-dropdown="1">' +
           '<div class="tt-trig"' + (!canDownload ? ' data-tip="' + esc(dlTip) + '"' : '') + '><span class="dl-trig" data-dl="' + idx + '">' + DOWNLOAD(!canDownload) + '</span></div>' +
-          (dlMenuFor === idx ? '<div class="dl-menu"><button type="button" data-dlc="' + idx + '">' + (after && r.status === 'remaining' ? 'Download Configuration Only' : 'Download Complete Instance') + '</button><button type="button" data-dls="' + idx + '">Download Selected Files</button></div>' : '') +
+          (dlMenuFor === idx ? '<div class="dl-menu"><button type="button" data-dlc="' + idx + '">' + 'Download Complete Instance' + '</button><button type="button" data-dls="' + idx + '">Download Selected Files</button></div>' : '') +
           '</div>';
       }
       var cells = [
@@ -665,26 +675,27 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     } else {
       var cfg = k === 'config';
       h = '<div class="mo">' +
-        '<div class="mo-h"><h3>' + (cfg ? 'Download Configuration Only' : 'Download Complete Instance') + '</h3><span class="mo-x" id="moX">' + IOCLOSE16 + '</span></div>' +
+        '<div class="mo-h"><h3>' + (cfg ? 'Download Instance' : 'Download Complete Instance') + '</h3><span class="mo-x" id="moX">' + IOCLOSE16 + '</span></div>' +
         '<div class="mo-b">' + sbvSection() +
           
         '</div>' +
         '<div class="mo-f"><div class="mo-f-row">' + btnSm('moCancel', 'Cancel', 'Close this dialog without downloading.', false, true) +
-          btnSm('moDownload', 'Download', cfg ? "Download the instance's configuration, without models." : 'Download the full instance package, including database and all models.') + '</div></div>' +
+          btnSm('moDownload', 'Download', cfg ? (OURS.saved.length ? T.dlSome : T.dlNone) : 'Download the full instance package, including database and all models.') + '</div></div>' +
       '</div>';
     }
     host.innerHTML = '<div class="mo-ov" role="dialog" aria-modal="true">' + h + '</div>';
   }
   function savedVersion(r){ var v = rowScripts(r); return v && v !== '-' ? v : null; }
   function openDownload(r, which, prefill){
-    // which: 'complete' | 'selective'. A Models Remaining instance's complete download is the Configuration only package (after change).
+    // which: 'complete' | 'selective'. After change: a Models Remaining row opens the "Download Instance" popup directly.
     var kind = which === 'selective' ? 'selective' : (after && r.status === 'remaining' ? 'config' : 'complete');
     modal = { kind: kind, row: r, version: savedVersion(r), db: false, models: {} };
     if (prefill) {
       if (!modal.version) modal.version = EDGE_VERSIONS[0];
-      if (kind === 'selective') rowModels(r).forEach(function(m){ modal.models[m] = true; });
+      if (kind === 'selective') ['Bead_Top_27-10', 'SEG_Top_27-10'].forEach(function(m){ if (rowModels(r).indexOf(m) >= 0) modal.models[m] = true; });
     }
     renderModal();
+    if (prefill) { var ml = document.querySelector('.mdl-list'); if (ml) ml.scrollTop = ml.scrollHeight; }
   }
   function closeModal(){ modal = null; closeSelect(); renderModal(); }
 
@@ -703,7 +714,10 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
         downloading = null;
         if (version && r.key !== 'ours') r.scripts = version;
         if (r.key === 'ours') {
-          if (kind === 'config' || (!after && r.status === 'remaining')) { writeState({ configDownloaded: true, edgeVersion: version || S.edgeVersion }); afterDownload('config'); }
+          if (r.status === 'remaining' && kind !== 'selective') {
+            if (OURS.saved.length) { writeState({ someDownloaded: true, edgeVersion: version || S.edgeVersion }); afterDownload('some'); }
+            else { writeState({ configDownloaded: true, edgeVersion: version || S.edgeVersion }); afterDownload('config'); }
+          }
           else if (r.status === 'completed') { writeState({ modelsDownloaded: true, edgeVersion: version || S.edgeVersion }); afterDownload('models'); }
         }
         renderRows();
@@ -712,18 +726,24 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     }, 700);
   }
   function afterDownload(what){
-    var to = PAGE === 'models' ? 'vision-instances' : (what === 'config' ? 'edge-upload' : 'edge-add-models');
+    if (PAGE !== 'instances') return;
+    var to = what === 'config' ? 'edge-upload' : what === 'some' ? 'edge-upload-some' : 'edge-add-models';
     setTimeout(function(){ nav(to); }, 900);
   }
 
   /* ---------- Wizard (vision-model-selection.html) ---------- */
   var STEPS = ['Basic', 'Add Camera Details', 'Recipe', 'Model Selection', 'Finish'];   // instanceWizard.getInstanceTimeline(false)
   var wizardOpen = false, wzEdit = false, step = 1, picks = {}, collapsed = {}, selectedCaps = { cc1: true, cc2: true };
-  var modelsTrained = state === 'edit';
+  /* GET /model: which slots have a trained model at this stage */
+  var TRAINED = state === 'edit' ? ALL_KEYS.slice() : state === 'edit-some' ? FIRST.slice() : [];
+  function isTrained(k){ return TRAINED.indexOf(k) >= 0; }
+  function pickedCount(){ return ALL_SLOTS.filter(function(s){ return picks[s.key]; }).length; }
   function allPicked(){ return ALL_SLOTS.every(function(s){ return picks[s.key]; }); }
   function stepValid(){
     if (step === 3) return Object.keys(selectedCaps).length > 0;
-    if (step === 4) return !modelsTrained || allPicked();       // ModelSelection.tsx:425-536: only modules with a trained model are required
+    // Today (ModelSelection.tsx:425-536): only slots that have a trained model must be picked.
+    // After change: Next needs a model for every AI module.
+    if (step === 4) return after ? allPicked() : ALL_SLOTS.every(function(s){ return !isTrained(s.key) || picks[s.key]; });
     return true;
   }
   function renderTimeline(){
@@ -837,7 +857,7 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
   }
   function selTable(s){
     var body;
-    if (!modelsTrained) body = '<tr><td colspan="4" class="empty"><div class="td-in">' + s.empty + '</div></td></tr>';
+    if (!isTrained(s.key)) body = '<tr><td colspan="4" class="empty"><div class="td-in">' + s.empty + '</div></td></tr>';
     else body = '<tr>' +
       '<td><div class="td-in"><label class="radio' + (picks[s.key] ? ' on' : '') + '" data-pick="' + s.key + '"><i></i></label></div></td>' +
       '<td><div class="td-in">' + esc(s.model.name) + '</div></td>' +
@@ -903,7 +923,11 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     document.getElementById('wzNextTip').setAttribute('data-tip', step < 5 ? 'Continue to the next step.' : 'Finish and create this instance.');
     document.getElementById('wzNext').disabled = !stepValid();
     // After change: "Add models later & download" on Model Selection while at least one AI module has no model
-    document.getElementById('wzLaterTip').hidden = !(after && step === 4 && !(modelsTrained && allPicked()));
+    // After change: "Finish without models" / "Finish without all models" on Model Selection until every AI module has a model
+    var later = after && step === 4 && !allPicked(), none = pickedCount() === 0;
+    document.getElementById('wzLaterTip').hidden = !later;
+    document.getElementById('wzLater').textContent = none ? 'Finish without models' : 'Finish without all models';
+    document.getElementById('wzLaterTip').setAttribute('data-tip', none ? T.finNone : T.finSome);
   }
   function openWizard(edit, atStep){
     closeMenu();
@@ -923,10 +947,19 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     // Finish.tsx:123-146 POST /instance/activate -> toast, drawer closes, list refetched
     if (rows.indexOf(OURS) < 0) rows.unshift(OURS);
     OURS.createdAt = D(2026, 9, 28, 11, 42, 10); OURS.validTill = D(2027, 9, 28, 11, 42, 10);
-    OURS.status = modelsTrained && allPicked() ? 'completed' : 'remaining';
+    OURS.saved = ALL_KEYS.filter(function(k){ return picks[k]; });
+    OURS.status = statusFor(OURS.saved);
     wizardOpen = false; document.getElementById('wizard').hidden = true;
     toast('success', 'Instance activated successfully!', 3000);
     renderRows();
+  }
+
+  function afterFinish(wasEdit, some){
+    var to = null;
+    if (!wasEdit) to = 'vision-instances';
+    else if (OURS.status === 'completed') { writeState({ modelsSelected: true }); to = 'vision-download-models'; }
+    else if (state === 'edit-some' && some) { writeState({ someSelected: true }); to = 'vision-download-some'; }
+    if (to) setTimeout(function(){ nav(to); }, 1500);
   }
 
   /* ---------- events ---------- */
@@ -968,7 +1001,7 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     if (t.closest('#actEdit')) {
       var er = rows[menuFor]; closeMenu();
       if (er && er.key === 'ours') {
-        if (PAGE === 'models') { modelsTrained = true; openWizard(true, 1); }
+        if (PAGE === 'models') { picks = {}; OURS.saved.forEach(function(k){ picks[k] = true; }); openWizard(true, 1); }
         else if (framed) nav('vision-add-models');
         else location.href = 'vision-model-selection.html?state=edit&mode=' + mode;
       }
@@ -982,25 +1015,27 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     if (dl) {
       var di = +dl.getAttribute('data-dl'), dr2 = rows[di];
       if (isDraft(dr2) || isUnplaced(dr2) || downloading) return;
+      if (after && dr2.status === 'remaining') { dlMenuFor = null; renderRows(); openDownload(dr2, 'complete'); return; }
       dlMenuFor = dlMenuFor === di ? null : di; renderRows(); return;
     }
-    if (t.closest('#createBtn')) { if (PAGE === 'models' && rows.indexOf(OURS) < 0) { modelsTrained = false; picks = {}; openWizard(false, 1); } return; }
+    if (t.closest('#createBtn')) { if (PAGE === 'models' && rows.indexOf(OURS) < 0) { picks = {}; openWizard(false, 1); } return; }
     if (!wizardOpen) return;
     // wizard
     if (t.closest('#wzClose') || t.closest('#wzCancel') || t.closest('#wzBackdrop')) { closeWizard(); return; }
     if (t.closest('#wzBack')) { if (step > 1) { step--; renderStep(); } return; }
     if (t.closest('#wzLater')) {
+      // After change: saves the picks (POST /instance/link-model) and activates; Status = Models Remaining; back to the table
+      var hadEdit = wzEdit, some = pickedCount() > 0;
       finishInstance();
-      openDownload(OURS, 'complete');
+      afterFinish(hadEdit, some);
       return;
     }
     if (t.closest('#wzNext')) {
       if (document.getElementById('wzNext').disabled) return;
       if (step < 5) { step++; renderStep(); return; }
-      var wasEdit = wzEdit;
+      var wasEdit = wzEdit, any = pickedCount() > 0;
       finishInstance();
-      if (wasEdit && OURS.status === 'completed') { writeState({ modelsSelected: true }); setTimeout(function(){ nav('vision-download-models'); }, 1500); }
-      else if (!wasEdit) setTimeout(function(){ nav('vision-instances'); }, 1500);
+      afterFinish(wasEdit, any);
       return;
     }
     var col = t.closest('[data-col]'); if (col) { var id = col.getAttribute('data-col'); collapsed[id] = !collapsed[id]; renderStep(); return; }
@@ -1054,12 +1089,11 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
   function boot(){
     sizeList(); renderRows();
     if (PAGE === 'models') {
-      if (state === 'edit') {
-        if (pickedAll) ALL_SLOTS.forEach(function(s){ picks[s.key] = true; });
+      if (state === 'edit' || state === 'edit-some') {
+        OURS.saved.forEach(function(k){ picks[k] = true; });                 // GET /instance/deployed-models
+        if (pickedAll) TRAINED.forEach(function(k){ picks[k] = true; });
         openWizard(true, 4);
-      } else if (after && openParam === 'download') {
-        finishInstance(); document.getElementById('toast').hidden = true;
-        openDownload(OURS, 'complete', true);
+        if (state === 'edit' || pickedAll) { var mb = document.querySelector('#stepHost .ms-body'); if (mb) mb.scrollTop = mb.scrollHeight; }   // Top View in view
       } else {
         openWizard(false, 4);
       }

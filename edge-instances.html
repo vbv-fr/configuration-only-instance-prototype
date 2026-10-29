@@ -401,7 +401,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   'use strict';
 
   // ---------- ?mode=today|after (default after), ?state=, ?open=dialog ----------
-  var STATES = ['upload', 'uploaded', 'models', 'wrong-instance', 'missing-config'];
+  var STATES = ['upload', 'uploaded', 'some-models', 'models', 'wrong-instance', 'missing-config', 'reupload-config', 'reupload-full'];
   var mode = 'after', state = 'upload', openParam = '';
   try {
     var qs = new URLSearchParams(location.search);
@@ -457,43 +457,74 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   var L2 = { id: '5c1e7a92-3f4b-4d8e-9a26-0b7f3c51e8d4', name: 'Line 2 Assembly', teamName: 'Team 1' };
   function L3() { var sh = readShared(); return { id: seedUuid(sh.instanceId), name: sh.instanceName, teamName: 'Team 1' }; }
   function inst(ref) { return ref === 'L3' ? L3() : L2; }
+  var REUPLOAD_DAY = state === 'reupload-config' || state === 'reupload-full';
   var T = {
     l2Created: new Date(2026, 9, 14, 15, 33, 18).getTime(), l2Updated: new Date(2026, 9, 27, 11, 8, 42).getTime(),
-    l2Reup: new Date(2026, 9, 28, 9, 2, 16).getTime(),
+    l2Reup: new Date(2026, 9, REUPLOAD_DAY ? 29 : 28, 9, 2, 16).getTime(),
     l3Created: new Date(2026, 9, 27, 16, 42, 5).getTime(), l3Cfg: new Date(2026, 9, 28, 10, 14, 31).getTime(),
-    l3Models: new Date(2026, 9, 28, 16, 5, 12).getTime()
+    l3Some: new Date(2026, 9, 28, 13, 40, 22).getTime(), l3Models: new Date(2026, 9, 28, 16, 5, 12).getTime(),
+    l3ReCfg: new Date(2026, 9, 29, 10, 48, 9).getTime(), l3ReFull: new Date(2026, 9, 29, 11, 39, 51).getTime()
   };
   var rows = [{ ref: 'L2', createdAt: T.l2Created, updatedAt: T.l2Updated, tagged: false }];
   function addL3Row(tagged, updatedAt) { rows.push({ ref: 'L3', createdAt: T.l3Created, updatedAt: updatedAt, tagged: tagged }); }
+  // Line 3 on the box: Configuration only (tagged), or with some models (still tagged)
   if (state === 'uploaded' && mode === 'after') addL3Row(true, T.l3Cfg);
-  if (state === 'models' || state === 'wrong-instance') addL3Row(mode === 'after', T.l3Cfg);
+  if (['some-models', 'wrong-instance', 'reupload-config', 'reupload-full'].indexOf(state) >= 0) addL3Row(mode === 'after', T.l3Cfg);
+  if (state === 'models') addL3Row(mode === 'after', T.l3Some);
   function rowOf(ref) { return rows.filter(function (r) { return r.ref === ref; })[0] || null; }
   function rowById(id) { return rows.filter(function (r) { return inst(r.ref).id === id; })[0] || null; }
 
-  // ---------- Packages in ~/Downloads (Vision names them "<instanceId>_<ISO time>.zip": frinksvision-backend controller/instance.ts:321) ----------
-  function pkgs() {
-    var l3 = L3();
-    return {
-      l2full: { key: 'l2full', type: 'full_instance', ref: 'L2', instId: L2.id, instName: L2.name, file: L2.id + '_2026-10-20T06-12-44-905Z.zip', size: '486.3 MB', mod: '20 Oct' },
-      l3cfg: { key: 'l3cfg', type: mode === 'today' ? 'db_only' : 'config_only', ref: 'L3', instId: l3.id, instName: l3.name, file: l3.id + '_2026-10-28T04-41-07-312Z.zip', size: '2.4 MB', mod: '10:11' },
-      l3models: { key: 'l3models', type: 'model_update', ref: 'L3', instId: l3.id, instName: l3.name, file: l3.id + '_2026-10-28T10-26-51-118Z.zip', size: '612.8 MB', mod: '15:56' }
-    };
-  }
-  function filesForState() { return state === 'upload' ? ['l2full', 'l3cfg'] : ['l2full', 'l3cfg', 'l3models']; }
-  function defaultFile() { return state === 'upload' ? 'l3cfg' : 'l3models'; }
-
-  // Line 3's modules (module ids are what the model_update mapper rows reference)
-  var MODELS = [
-    ['Variant A', 'Front View', 'Part Presence', 'ODC_Front_27-10'],
-    ['Variant A', 'Front View', 'Label Text', 'OCR-D_Front_27-10'],
-    ['Variant A', 'Front View', 'Label Text', 'OCR-R_Front_27-10'],
-    ['Variant A', 'Top View', 'Seal Bead', 'Bead_Top_27-10'],
-    ['Variant A', 'Top View', 'Surface Check', 'SEG_Top_27-10']
-  ];
+  // ---------- Line 3's models ----------
+  var M = {
+    odc: ['Variant A', 'Front View', 'Part Presence', 'ODC_Front_27-10'],
+    ocrd: ['Variant A', 'Front View', 'Label Text', 'OCR-D_Front_27-10'],
+    ocrr: ['Variant A', 'Front View', 'Label Text', 'OCR-R_Front_27-10'],
+    bead: ['Variant A', 'Top View', 'Seal Bead', 'Bead_Top_27-10'],
+    seg: ['Variant A', 'Top View', 'Surface Check', 'SEG_Top_27-10']
+  };
+  var SOME_MODELS = [M.odc, M.ocrd, M.ocrr], REST_MODELS = [M.bead, M.seg], ALL_MODELS = [M.odc, M.ocrd, M.ocrr, M.bead, M.seg];
   function moduleIds() {
     var seed = readShared().instanceId;
     return ['Part Presence', 'Label Text', 'Seal Bead', 'Surface Check'].map(function (m) { return seedUuid(seed + '/' + m); });
   }
+  // Ground truth changed on this Edge (EMC) after the first upload, in the re-upload states.
+  // Shape of a getPreservationDetails gtDiff (uploadValidation.ts:1060-1470), values via formatValue (InstanceTable.jsx:38-57).
+  var GT_DIFFS = [
+    ['Variant A', 'Front View', 'Part Presence', 'Bolt', 'groundTruth', '= 4', '= 2'],
+    ['Variant A', 'Top View', 'Seal Bead', '-', 'gt_width', '14', '12']
+  ];
+  function gtDiffsFor(p) { return REUPLOAD_DAY && p.ref === 'L3' && p.hasSql && rowById(p.instId) ? GT_DIFFS : null; }
+
+  // ---------- Packages in ~/Downloads (Vision names them "<instanceId>_<ISO time>.zip": frinksvision-backend controller/instance.ts:321) ----------
+  // kind: config = configuration, no models; some = configuration + some models; full = configuration + every model;
+  // models = models only (partial SQL). type = the manifest packageType Vision writes today (packageManifest.ts:71-103).
+  function pkgs() {
+    var l3 = L3();
+    function day(d, t) { return REUPLOAD_DAY && d === 28 ? '28 Oct' : t; }
+    function P(key, kind, type, ref, stamp, size, mod, hasSql) {
+      var i = inst(ref);
+      return { key: key, kind: kind, type: type, ref: ref, instId: i.id, instName: i.name, file: i.id + '_' + stamp + '.zip', size: size, mod: mod, hasSql: hasSql };
+    }
+    return {
+      l2full: P('l2full', 'full', 'full_instance', 'L2', '2026-10-20T06-12-44-905Z', '486.3 MB', '20 Oct', true),
+      l3cfg: P('l3cfg', 'config', 'db_only', 'L3', '2026-10-28T04-41-07-312Z', '2.4 MB', day(28, '10:11'), true),
+      l3some: P('l3some', 'some', 'full_instance', 'L3', '2026-10-28T08-02-33-410Z', '241.7 MB', day(28, '13:32'), true),
+      l3models: P('l3models', 'models', 'model_update', 'L3', '2026-10-28T10-26-51-118Z', '386.2 MB', day(28, '15:56'), false),
+      l3cfg2: P('l3cfg2', 'config', 'db_only', 'L3', '2026-10-29T05-12-40-221Z', '2.4 MB', '10:42', true),
+      l3full: P('l3full', 'full', 'full_instance', 'L3', '2026-10-29T06-03-18-774Z', '627.9 MB', '11:33', true)
+    };
+  }
+  var FILES = {
+    'upload': ['l2full', 'l3cfg'], 'uploaded': ['l2full', 'l3cfg'],
+    'some-models': ['l2full', 'l3cfg', 'l3some'],
+    'models': ['l2full', 'l3cfg', 'l3some', 'l3models'], 'wrong-instance': ['l2full', 'l3cfg', 'l3some', 'l3models'], 'missing-config': ['l2full', 'l3cfg', 'l3some', 'l3models'],
+    'reupload-config': ['l2full', 'l3cfg', 'l3cfg2'], 'reupload-full': ['l2full', 'l3cfg', 'l3full']
+  };
+  var DEFAULT_FILE = { 'upload': 'l3cfg', 'uploaded': 'l3cfg', 'some-models': 'l3some', 'models': 'l3models', 'wrong-instance': 'l3models',
+    'missing-config': 'l3models', 'reupload-config': 'l3cfg2', 'reupload-full': 'l3full' };
+  function filesForState() { return FILES[state]; }
+  function defaultFile() { return DEFAULT_FILE[state]; }
+  function modelsIn(p) { return p.key === 'l3some' ? SOME_MODELS : p.key === 'l3models' ? REST_MODELS : p.key === 'l3full' ? ALL_MODELS : null; }
 
   // ---------- Upload validation (frinksedge-deployment-backend service/uploadValidation.ts) ----------
   // addReuploadWarnings (746-752)
@@ -503,35 +534,38 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     'Dashboards preserved, but some widget keys may be affected if class or model references changed.',
     'Inferencing customization (file paths, naming configs) preserved, but may need reconfiguration.'
   ];
+  // After: the analysed-image (ROI) reset is out of this change's scope, so its line is not shown.
+  var REUPLOAD_W_AFTER = [REUPLOAD_W[0], REUPLOAD_W[2], REUPLOAD_W[3]];
   // validateNewInstanceOnExistingEdge (228-233)
   var NEW_INSTANCE_W = [
     'Shared configs (camera configs, capture positions) will be deleted and re-created. This affects all instances on this edge.',
     'If camera config IDs have changed, re-upload the first instance as well.'
   ];
+  var LOCKED_NONE = 'Deploy and Edge testing stay locked until models are added.';
+  var LOCKED_SOME = 'Deploy stays locked until every module has a model.';
+
   function validate(p, target) {
     var errors = [], warnings = [];
-    var res = { canProceed: true, errors: errors, warnings: warnings, summary: null, models: null };
+    var res = { canProceed: true, errors: errors, warnings: warnings, summary: null, models: null, gtDiffs: null };
     function done() { res.canProceed = errors.length === 0; return res; }
+    function push(list) { list.forEach(function (w) { warnings.push(w); }); }
 
-    if (mode === 'after' && (p.type === 'config_only' || p.type === 'model_update')) {
+    if (mode === 'after' && p.ref === 'L3') {
+      // Right-instance check first; the instance is found by the package's own id, never by "LIMIT 1".
       if (target && target.id !== p.instId) { errors.push("This package is for '" + p.instName + "', not '" + target.name + "'."); return done(); }
-      if (p.type === 'model_update' && !rowById(p.instId)) { errors.push("This models package is for '" + p.instName + "'. Upload its configuration first."); return done(); }
-      if (p.type === 'config_only') {
-        res.summary = [['Instance', p.instName], ['Package', 'Configuration only']];
-        if (!rowById(p.instId)) {
-          warnings.push('Deploy and Edge testing stay locked until models are added.');
-          NEW_INSTANCE_W.forEach(function (w) { warnings.push(w); });
-        } else {
-          REUPLOAD_W.forEach(function (w) { warnings.push(w); });
-        }
-        return done();
-      }
-      res.summary = [['Instance', p.instName], ['Package', 'Models update']];
-      res.models = MODELS;
+      var onBox = !!rowById(p.instId);
+      if (p.kind === 'models' && !onBox) { errors.push("This models package is for '" + p.instName + "'. Upload its configuration first."); return done(); }
+      var bracket = p.kind === 'config' ? ' (Configuration only)' : p.kind === 'some' ? ' (Models Remaining)' : '';
+      res.summary = [['Instance', p.instName + bracket]];
+      if (p.kind === 'config') push([LOCKED_NONE]);
+      if (p.kind === 'some') push([LOCKED_SOME]);
+      if (p.hasSql) push(onBox ? (p.kind === 'some' ? [] : REUPLOAD_W_AFTER) : NEW_INSTANCE_W);
+      res.models = modelsIn(p);
+      res.gtDiffs = gtDiffsFor(p);
       return done();
     }
 
-    // Today (and full packages after the change): validateUpload (50-130)
+    // Today (and Line 2's own package after the change): validateUpload (50-130)
     if (target && target.id !== p.instId) {
       errors.push("Target instance ID mismatch. You selected instance '" + target.id + "' but the uploaded package is for instance '" + p.instId + "'.");
       return done();
@@ -543,7 +577,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
       // validateDBOnly (301-338)
       if (!edge) { errors.push('No instance found on edge. Cannot perform DB-only re-upload.'); return done(); }
       if (edge.id !== p.instId) errors.push("Instance ID mismatch. Edge has '" + edge.id + "', upload has '" + p.instId + "'.");
-      REUPLOAD_W.forEach(function (w) { warnings.push(w); });
+      push(REUPLOAD_W);
       warnings.push('No model weights included. Existing weights on edge will be used.');
     } else if (p.type === 'model_update') {
       // validateModelUpdate (342-425) + validateMapperModuleIds (980-1021)
@@ -553,10 +587,13 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
         errors.push('Module ID(s) referenced in mapper do not exist on this edge: [' + moduleIds().join(', ') + ']. Upload a full instance first to ensure all modules are present before running a model update.');
       }
     } else {
-      // full_instance: detectScenario (manifestParser.ts:187-215)
-      if (edge && edge.id === p.instId) REUPLOAD_W.forEach(function (w) { warnings.push(w); });
-      else if (edge) NEW_INSTANCE_W.forEach(function (w) { warnings.push(w); });
+      // full_instance: detectScenario (manifestParser.ts:187-215) — FULL_REUPLOAD when the sampled instance is this one,
+      // otherwise NEW_INSTANCE_EXISTING_EDGE (even when this instance is already on the box but "LIMIT 1" sampled another).
+      if (edge && edge.id === p.instId) push(REUPLOAD_W);
+      else if (edge) push(NEW_INSTANCE_W);
     }
+    // getPreservationDetails runs for every package with SQL (125-128)
+    res.gtDiffs = gtDiffsFor(p);
     return done();
   }
 
@@ -789,7 +826,8 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   }
   function handleResult(hookKey, pkgKey, targetRef, r) {
     if (!r.canProceed) { hooks[hookKey].errors = r.errors; renderBanners(); return; }
-    if (r.warnings.length > 0 || r.models) { openWarning(hookKey, pkgKey, targetRef, r); return; }
+    // Today the modal opens only when there are warnings; after the change every Line 3 package is confirmed first.
+    if (r.warnings.length > 0 || r.summary) { openWarning(hookKey, pkgKey, targetRef, r); return; }
     proceed(pkgKey);
   }
   function proceed(pkgKey) {
@@ -809,18 +847,15 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     }, 800);
   }
   function applyUpload(pkgKey) {
-    if (pkgKey === 'l3cfg') {
-      var r = rowOf('L3');
-      if (r) r.updatedAt = T.l3Cfg; else addL3Row(mode === 'after', T.l3Cfg);
-      writeShared({ configUploaded: true });
-      return null;
-    }
-    if (pkgKey === 'l3models') {
-      var m = rowOf('L3');
-      if (m) { m.tagged = false; m.updatedAt = T.l3Models; }
-      writeShared({ modelsUploaded: true });
-      return 'edge-ready';
-    }
+    var r = rowOf('L3');
+    function touchL3(tagged, at) { if (r) { r.tagged = tagged; r.updatedAt = at; } else addL3Row(tagged, at); }
+    var tagOn = mode === 'after';
+    if (pkgKey === 'l3cfg') { touchL3(tagOn, T.l3Cfg); writeShared({ configUploaded: true }); return null; }
+    if (pkgKey === 'l3cfg2') { touchL3(r ? r.tagged : tagOn, T.l3ReCfg); return null; }
+    // Some models: still Models Remaining, so the tag stays
+    if (pkgKey === 'l3some') { touchL3(tagOn, T.l3Some); writeShared({ someUploaded: true }); return 'edge-emc-some'; }
+    if (pkgKey === 'l3models') { if (r) { r.tagged = false; r.updatedAt = T.l3Models; } writeShared({ modelsUploaded: true }); return 'edge-ready'; }
+    if (pkgKey === 'l3full') { touchL3(false, T.l3ReFull); return null; }
     var l2 = rowOf('L2'); if (l2) l2.updatedAt = T.l2Reup;
     return null;
   }
@@ -840,6 +875,12 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     }
     // The real modal always renders the list; an after-change dialog with no warnings leaves it out.
     if (r.warnings.length || !r.summary) h += '<ul class="iw-ul">' + r.warnings.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul>';
+    // Ground Truth Preservation (InstanceTable.jsx:85-117): only when preservationDetails.gtDiffs has rows
+    if (r.gtDiffs && r.gtDiffs.length) {
+      h += '<div class="iw-sec"><h3>Ground Truth Preservation</h3><p>The following Ground Truth parameters configured on this Edge device will be preserved in the updated instance.</p>' +
+        tableHTML(['Variant', 'Capture', 'Module', 'Class/Label', 'Parameter', 'Edge (Preserved)', 'Vision'], r.gtDiffs.map(function (d, i) { return cellRow(d, i); }).join(''), true) + '</div>';
+    }
+    // New after the change: the models this package adds (after the real sections)
     if (r.models) {
       h += '<div class="iw-sec"><h3>Models</h3><p>The following models will be added to this instance.</p>' +
         tableHTML(['Variant', 'Capture', 'Module', 'Model'], r.models.map(function (m, i) { return cellRow(m, i); }).join(''), true) + '</div>';
@@ -897,16 +938,14 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     if (state === 'missing-config') hooks.top.errors = validate(pkgs().l3models, null).errors;
     renderBanners();
     if (openParam !== 'dialog') return;
-    var r;
-    if (state === 'upload') {
-      r = validate(pkgs().l3cfg, null);
-      if (!r.canProceed) { hooks.top.errors = r.errors; renderBanners(); }
-      else if (r.warnings.length || r.models) openWarning('top', 'l3cfg', null, r);
-    }
-    if (state === 'models' && rowOf('L3')) {
-      r = validate(pkgs().l3models, L3());
-      if (r.canProceed && (r.warnings.length || r.models)) openWarning('tbl', 'l3models', 'L3', r);
-    }
+    // [package, row whose Update is used (null = Add Instance), banner/hook]
+    var OPEN = { 'upload': ['l3cfg', null, 'top'], 'some-models': ['l3some', 'L3', 'tbl'], 'models': ['l3models', 'L3', 'tbl'],
+      'reupload-config': ['l3cfg2', 'L3', 'tbl'], 'reupload-full': ['l3full', 'L3', 'tbl'] };
+    var o = OPEN[state];
+    if (!o || (o[1] && !rowOf(o[1]))) return;
+    var r = validate(pkgs()[o[0]], o[1] ? inst(o[1]) : null);
+    if (!r.canProceed) { hooks[o[2]].errors = r.errors; renderBanners(); }
+    else if (r.warnings.length || r.summary) openWarning(o[2], o[0], o[1], r);
   }
 
   // Names and IDs follow the shared state

@@ -349,12 +349,13 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   'use strict';
 
   // ---------- Prototype params ----------
-  // ?state=no-models|ready  ?mode=today|after (default after)
+  // ?state=no-models|some-models|ready (some-models behaves as no-models here: deploy needs every model)  ?mode=today|after (default after)
   // ?open=create (header "Deploy Instances" drawer) | deploy (Line 3 row "Deploy" drawer) | failed | deployed (end results)
   // ?tip=1 shows the "Add models to deploy" bubble (row button, or the checkbox in the open drawer)
   var qs = new URLSearchParams(location.search);
   var mode = qs.get('mode') === 'today' ? 'today' : 'after';
-  var state = qs.get('state') === 'ready' ? 'ready' : 'no-models';
+  var rawState = qs.get('state') === 'ready' || qs.get('state') === 'some-models' ? qs.get('state') : 'no-models';
+  var state = rawState === 'ready' ? 'ready' : 'no-models';
   var open = qs.get('open') || '';
   var forceTip = qs.get('tip') === '1';
   var inShell = window.self !== window.top;
@@ -838,7 +839,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   sw.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-mode]');
     if (!b || b.getAttribute('data-mode') === mode) return;
-    var q = new URLSearchParams(); q.set('state', state); q.set('mode', b.getAttribute('data-mode'));
+    var q = new URLSearchParams(); q.set('state', rawState); q.set('mode', b.getAttribute('data-mode'));
     location.search = q.toString();
   });
 

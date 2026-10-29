@@ -98,6 +98,9 @@ body{overflow:auto}
 .kebab{padding:4px;color:#6b7280}
 .kebab:hover{color:#374151}
 .empty{padding:8px 0;text-align:center;color:#4b5563}
+/* Instance name + Models Remaining tag (same pill as edge-instances.html) */
+.ins-nm{display:inline-flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 8px}
+.tag-mr{white-space:nowrap;border-radius:9999px;border:1px solid #fef08a;background:#fefce8;color:#a16207;padding:2px 8px;font-size:11px;font-weight:500}
 .am{position:absolute;z-index:9999;width:128px;border-radius:6px;border:1px solid #e5e7eb;background:#fff;box-shadow:0 10px 15px -3px rgb(0 0 0 / .1),0 4px 6px -4px rgb(0 0 0 / .1)}
 .am button{display:flex;width:100%;align-items:center;gap:8px;padding:8px;text-align:left;font-size:12px;line-height:16px;color:#374151}
 .am button:hover{background:#f9fafb}
@@ -484,7 +487,8 @@ html.in-shell .pctl{display:none!important}
   var KEY = 'cfgonly-state';
   var DEF = { instanceName: 'Line 3 Assembly', instanceId: 'ab677d65-aa67-4bd2-a967-7a3fa86778ac', edgeVersion: null,
     configDownloaded: false, configUploaded: false, modelsSelected: false,
-    modelsDownloaded: false, modelsUploaded: false };
+    modelsDownloaded: false, modelsUploaded: false,
+    someSelected: false, someDownloaded: false, someUploaded: false };
   function readState() {
     var s = {}; try { s = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { s = {}; }
     var o = {}; for (var k in DEF) o[k] = (s[k] !== undefined && s[k] !== null && s[k] !== '') ? s[k] : DEF[k];
@@ -606,7 +610,7 @@ html.in-shell .pctl{display:none!important}
       $('rows').innerHTML = rows.map(function (d) {
         var on = d.status === 'Active';
         return '<tr class="' + (on ? 'act' : '') + '" data-id="' + d.id + '">' +
-          '<td><div class="c">' + esc(d.instance()) + '</div></td>' +
+          '<td><div class="c">' + insCell(d) + '</div></td>' +
           '<td><div class="c"><span class="dn" data-open="' + d.id + '">' + esc(d.name()) + '</span></div></td>' +
           '<td><div class="c"><div class="dl"><a href="#" data-link="1">' + esc(d.url) + '</a></div></div></td>' +
           '<td><div class="c">' + esc(d.created) + '</div></td>' +
@@ -617,6 +621,14 @@ html.in-shell .pctl{display:none!important}
       }).join('');
     }
     sizeCols();
+  }
+  // Our instance carries the Models Remaining tag until its models are uploaded (After only).
+  function insCell(d) {
+    var n = d.instance();
+    if (mode === 'after' && n === S.instanceName && !S.modelsUploaded) {
+      return '<span class="ins-nm"><span>' + esc(n) + '</span><span class="tag-mr">Models Remaining</span></span>';
+    }
+    return esc(n);
   }
   function sizeCols() {
     var w = $('tblWrap').offsetWidth || 1286;

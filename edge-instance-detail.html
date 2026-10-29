@@ -158,6 +158,8 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
 .ui .tbl-w{margin:16px 0;display:flex;flex-direction:column;gap:16px}
 .ui tbody tr{font-weight:500}
 .browse{color:#ff4301;text-decoration:underline;cursor:pointer}
+/* Notice: health-monitor/components/LiveValuesTab.jsx:209 */
+.notice{border-radius:8px;border:1px solid #fde68a;background:#fffbeb;padding:12px 16px;font-size:14px;line-height:20px;color:#92400e}
 .folder{display:flex;align-items:center;justify-content:space-between;gap:8px;border-radius:6px;padding:8px;cursor:pointer;box-shadow:0 4px 6px -1px rgb(0 0 0/.1),0 2px 4px -2px rgb(0 0 0/.1)}
 .ts-foot{display:flex;width:100%;justify-content:flex-end;overflow:hidden;border-top:1px solid #9ca3af;background:#fff;padding:16px 8px 0 0}
 .ts-foot>div{display:flex;max-width:28rem;flex:1 1 0%;align-items:center;justify-content:flex-end;gap:16px}
@@ -334,17 +336,21 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
 (function () {
   'use strict';
 
-  // ---------- Prototype params: ?state=no-models|ready  ?mode=today|after (default after)  ?tab=testing  ?tip=1 ----------
+  // ---------- Prototype params: ?state=no-models|some-models|ready  ?mode=today|after (default after)
+  // ?tab=testing  ?tip=1 (Run Test bubble)  ?open=run (Run a new test drawer) ----------
   var qs = new URLSearchParams(location.search);
   var mode = qs.get('mode') === 'today' ? 'today' : 'after';
-  var state = qs.get('state') === 'ready' ? 'ready' : 'no-models';
-  var tab = qs.get('tab') === 'testing' ? 'testing' : 'overview';
+  var state = qs.get('state') === 'ready' ? 'ready' : qs.get('state') === 'some-models' ? 'some-models' : 'no-models';
+  var openRun = qs.get('open') === 'run';
+  var tab = qs.get('tab') === 'testing' || openRun ? 'testing' : 'overview';
   var forceTip = qs.get('tip') === '1';
   var inShell = window.self !== window.top;
 
   // Models Remaining only exists after the change; today the same instance has no such status.
-  var noModels = state === 'no-models';
-  var locked = noModels && mode === 'after';
+  // no-models: no module has a model. some-models: Part Presence + Label Text have theirs, Seal Bead + Surface Check don't.
+  var missingAny = state !== 'ready';
+  var locked = missingAny && mode === 'after';             // Models Remaining tag + "Not added yet" rows
+  var runLocked = state === 'no-models' && mode === 'after'; // Run Test needs at least one model
 
   // ---------- Shared prototype state (localStorage "cfgonly-state") ----------
   var KEY = 'cfgonly-state';
@@ -369,12 +375,20 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   // ---------- Sample data (brief) ----------
   // One row per module mapping (GET /instance/models). Barcode (Code Reader) needs no model.
   var MAPPINGS = [
-    { variant: 'Variant A', capture: 'Front View', module: 'Part Presence', model: 'ODC_Front_27-10', classes: ['Bolt', 'Washer', 'Clip'] },
-    { variant: 'Variant A', capture: 'Front View', module: 'Label Text', model: 'OCR-D_Front_27-10', classes: [] },
-    { variant: 'Variant A', capture: 'Front View', module: 'Label Text', model: 'OCR-R_Front_27-10', classes: [] },
+    { variant: 'Variant A', capture: 'Front View', module: 'Part Presence', model: 'ODC_Front_27-10', classes: ['Bolt', 'Washer', 'Clip'], some: true },
+    { variant: 'Variant A', capture: 'Front View', module: 'Label Text', model: 'OCR-D_Front_27-10', classes: [], some: true },
+    { variant: 'Variant A', capture: 'Front View', module: 'Label Text', model: 'OCR-R_Front_27-10', classes: [], some: true },
     { variant: 'Variant A', capture: 'Top View', module: 'Seal Bead', model: 'Bead_Top_27-10', classes: [] },
     { variant: 'Variant A', capture: 'Top View', module: 'Surface Check', model: 'SEG_Top_27-10', classes: ['Scratch', 'Dent'] }
   ];
+  function hasModel(m) { return state === 'ready' || (state === 'some-models' && !!m.some); }
+  // Modules still without a model, in table order, once each.
+  function missingModules() {
+    var out = [];
+    MAPPINGS.forEach(function (m) { if (!hasModel(m) && out.indexOf(m.module) < 0) out.push(m.module); });
+    return out;
+  }
+  function joinNames(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
   var CAMERAS = [
     { variant: 'Variant A', ip: '192.168.1.11', capture: 'Front View' },
     { variant: 'Variant A', ip: '192.168.1.12', capture: 'Top View' }
@@ -385,7 +399,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   }
   var DATES = {
     createdAt: fmt(2026, 10, 27, 16, 42, 5),
-    updatedAt: state === 'ready' ? fmt(2026, 10, 28, 15, 32, 8) : fmt(2026, 10, 28, 10, 14, 31),
+    updatedAt: state === 'ready' ? fmt(2026, 10, 28, 15, 32, 8) : state === 'some-models' ? fmt(2026, 10, 28, 13, 5, 47) : fmt(2026, 10, 28, 10, 14, 31),
     validTill: fmt(2027, 10, 27, 16, 42, 5)
   };
 
@@ -483,33 +497,34 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   // ---------- Model - Module Mapping (ModelModuleMappingTable.jsx) ----------
   function mappingTable() {
     var headers = [{ t: 'Model Name', tip: 'AI model and its classes.' }, { t: 'Variant' }, { t: 'Capture' }, { t: 'Modules', tip: 'Modules that use this model.' }];
-    var body = '';
-    if (!noModels) {
-      // Grouped by model; every model here has one variant and one capture, so one row each.
-      MAPPINGS.forEach(function (m, i) {
-        body += '<tr class="' + (i % 2 === 0 ? 'row-alt' : '') + '">' +
-          td('<div class="mm-cell"><span class="mm-name">' + esc(m.model) + '</span><div class="mm-cls">' +
-            m.classes.map(function (c) { return '<span class="chip-cls">' + esc(c) + '</span>'; }).join('') +
-            '</div><span class="chip-mods">1 modules</span></div>') +
-          td(esc(m.variant), ' class="g700"') + td(esc(m.capture), ' class="g700"') +
-          td('<div class="trunc">' + esc(m.module) + '</div>', ' class="g700"') + '</tr>';
-      });
-    } else if (locked) {
+    var body = '', idx = 0;
+    // Grouped by model; every model here has one variant and one capture, so one row each.
+    MAPPINGS.filter(hasModel).forEach(function (m) {
+      body += '<tr class="' + (idx++ % 2 === 0 ? 'row-alt' : '') + '">' +
+        td('<div class="mm-cell"><span class="mm-name">' + esc(m.model) + '</span><div class="mm-cls">' +
+          m.classes.map(function (c) { return '<span class="chip-cls">' + esc(c) + '</span>'; }).join('') +
+          '</div><span class="chip-mods">1 modules</span></div>') +
+        td(esc(m.variant), ' class="g700"') + td(esc(m.capture), ' class="g700"') +
+        td('<div class="trunc">' + esc(m.module) + '</div>', ' class="g700"') + '</tr>';
+    });
+    if (locked) {
       // After: modules whose model slot is empty are grouped under one "not added" entry, same grouping as a model.
       var byCap = {};
-      MAPPINGS.forEach(function (m) {
+      MAPPINGS.filter(function (m) { return !hasModel(m); }).forEach(function (m) {
         byCap[m.capture] = byCap[m.capture] || [];
         if (byCap[m.capture].indexOf(m.module) < 0) byCap[m.capture].push(m.module);
       });
       var caps = Object.keys(byCap), total = caps.reduce(function (n, c) { return n + byCap[c].length; }, 0);
+      var cls = idx++ % 2 === 0 ? 'row-alt' : '';
       caps.forEach(function (c, ci) {
-        body += '<tr class="row-alt">' +
+        body += '<tr class="' + cls + '">' +
           (ci === 0 ? td('<div class="mm-cell"><span class="mm-name none">Not added yet</span><div class="mm-cls"></div><span class="chip-mods">' + total + ' modules</span></div>', ' rowspan="' + caps.length + '"') +
             td('Variant A', ' rowspan="' + caps.length + '" class="g700"') : '') +
           td(esc(c), ' class="g700"') +
           td('<div class="trunc">' + esc(byCap[c].join(', ')) + '</div>', ' class="g700"') + '</tr>';
       });
-    } else {
+    }
+    if (!body) {
       // Today: rows without a model are skipped (ModelModuleMappingTable.jsx:40), so nothing is left to show.
       body = '<tr><td colspan="4"><div class="td-in"><span class="td-empty">No mapping information found.</span></div></td></tr>';
     }
@@ -542,7 +557,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
       h += '<div><h2 class="h2 mb4">Camera Details</h2>' + cameraTable() + '</div>';
       h += '</div>';
     } else {
-      var runTip = locked ? 'Add models to run tests' : 'Test this instance on a folder of saved images.';
+      var runTip = runLocked ? 'Add models to run tests' : 'Test this instance on a folder of saved images.';
       h += '<div class="tcol"><h1 class="h1">Testing Configuration</h1>' +
         '<div class="tcard"><h2 class="h2">Test Parameters</h2>' +
         '<div class="tgrid">' +
@@ -550,7 +565,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
         '<div class="sp6"><div><div class="lbl">Last Test Run</div><div class="big">N/A</div></div><div><div class="lbl">Success Rate</div><div class="big">N/A</div></div></div>' +
         '</div>' +
         '<div class="tbtns">' +
-        '<div class="tip-w" style="display:inline-block" data-tip="' + esc(runTip) + '" id="runTestTip"><button type="button" class="b b-pri b-lg" id="runTest"' + (locked ? ' disabled' : '') + '>Run Test</button></div>' +
+        '<div class="tip-w" style="display:inline-block" data-tip="' + esc(runTip) + '" id="runTestTip"><button type="button" class="b b-pri b-lg" id="runTest"' + (runLocked ? ' disabled' : '') + '>Run Test</button></div>' +
         '<button type="button" class="b b-border b-lg">View Test History</button>' +
         '</div></div></div>';
     }
@@ -573,6 +588,12 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
 
   // ---------- Run a new test (Drawer size 6xl + Testing.jsx + UploadImage.jsx) ----------
   var folders = {};
+  // After: modules without a model are skipped by the test and named here.
+  function skipNotice() {
+    if (mode !== 'after' || state !== 'some-models') return '';
+    var miss = missingModules();
+    return miss.length ? joinNames(miss) + (miss.length > 1 ? ' have no model yet. They will' : ' has no model yet. It will') + ' be skipped in this test.' : '';
+  }
   function openTesting() {
     var rows = CAMERAS.map(function (c, i) {
       var f = folders[i];
@@ -586,15 +607,19 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
       '<div class="t">Choose one dataset folder for each of the configurations (that you’d like to test for) which should contain the test images and/or annotations for them (<span style="font-style:italic">with both the annotation filename and the image filename matching each other; if you choose to provide annotation file for one image, you need to provide the annotation files for all the images. You can also optionally include a \'masks\' folder containing mask images for segmentation annotations</span>).</div>' +
       '<div class="t">If you choose to provide annotations, the test results will give you recommendations for each of the Module’s classes’ thresholds.</div>' +
       '<div class="t2">Choose dataset folders for each of the configurations which you want to test and start the testing</div>' +
-      '<div class="tbl-w">' + tableHTML([{ t: 'Variant' }, { t: 'Capture' }, { t: 'Dataset Folder', tip: 'Pick a folder of saved images to test this capture.' }], rows, {}) + '</div>' +
+      '<div class="tbl-w">' + (skipNotice() ? '<div class="notice">' + esc(skipNotice()) + '</div>' : '') +
+      tableHTML([{ t: 'Variant' }, { t: 'Capture' }, { t: 'Dataset Folder', tip: 'Pick a folder of saved images to test this capture.' }], rows, {}) + '</div>' +
       '</div></div></div>' +
       '<div class="ts-foot"><div><button type="button" class="b b-pri b-lg b-full" data-start>Start Testing</button><button type="button" class="b b-border b-lg b-full" data-close>Cancel</button></div></div>' +
       '</div></div>' +
       '<div class="dr-f"></div></div>';
     document.getElementById('drawerRoot').innerHTML = h;
+    syncSwitch();
     sizeColumns();
   }
-  function closeDrawer() { document.getElementById('drawerRoot').innerHTML = ''; folders = {}; }
+  function closeDrawer() { document.getElementById('drawerRoot').innerHTML = ''; folders = {}; syncSwitch(); }
+  // The Today | After switch steps aside while the drawer covers the bottom-right corner.
+  function syncSwitch() { document.getElementById('protoSw').style.display = inShell || document.querySelector('#drawerRoot .dr') ? 'none' : ''; }
   document.getElementById('drawerRoot').addEventListener('click', function (e) {
     if (e.target.closest('[data-close]')) { closeDrawer(); return; }
     var br = e.target.closest('[data-browse]');
@@ -645,12 +670,14 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     if (!b || b.getAttribute('data-mode') === mode) return;
     qs.set('mode', b.getAttribute('data-mode'));
     if (tab === 'testing') qs.set('tab', 'testing'); else qs.delete('tab');
+    qs.delete('open'); qs.delete('tip');
     location.search = qs.toString();
   });
 
   window.addEventListener('storage', function (e) { if (e.key === null || e.key === KEY) render(); });
   window.addEventListener('resize', sizeColumns);
   render();
+  if (openRun && !runLocked) openTesting();
 })();
 </script>
 </body>
