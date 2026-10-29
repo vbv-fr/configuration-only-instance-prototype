@@ -362,8 +362,8 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   var STATES = { odc: ['c1', 'm-odc'], ocr: ['c1', 'm-ocr'], code: ['c1', 'm-code'], bead: ['c2', 'm-bead'], seg: ['c2', 'm-seg'] };
   var stateKey = STATES[params.get('state')] ? params.get('state') : 'odc';
   var openParam = params.get('open');
-  // models=some: the intermediate stage (Part Presence and Label Text have models, Seal Bead and Surface Check not yet); models=all: every module.
-  var modelsParam = ['some', 'all'].indexOf(params.get('models')) >= 0 ? params.get('models') : null;
+  // models=none: no module has a model yet (the step 6 stage, whatever the walk stored). models=some: the intermediate stage (Part Presence and Label Text have models, Seal Bead and Surface Check not yet); models=all: every module.
+  var modelsParam = ['none', 'some', 'all'].indexOf(params.get('models')) >= 0 ? params.get('models') : null;
   var SOME_MODELS = { 'm-odc': true, 'm-ocr': true };
 
   var KEY = 'cfgonly-state';
@@ -413,6 +413,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     mid = mid || sel.mod;
     if (sel.inst === 'line2') return true;
     if (mode !== 'after') return false;
+    if (modelsParam === 'none') return false;
     if (shared.modelsUploaded || modelsParam === 'all') return true;
     return modelsParam === 'some' && !!SOME_MODELS[mid];
   }

@@ -677,7 +677,11 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
       h = '<div class="mo">' +
         '<div class="mo-h"><h3>' + (cfg ? 'Download Instance' : 'Download Complete Instance') + '</h3><span class="mo-x" id="moX">' + IOCLOSE16 + '</span></div>' +
         '<div class="mo-b">' + sbvSection() +
-          
+          (cfg && OURS.saved.length ? '<div class="sp3" style="margin-top:24px">' +
+            '<p style="font-size:14px;line-height:20px;color:#6b7280">Choose what to download.</p>' +
+            '<div class="ck-row"><input type="radio" name="pkg" id="pkg-models" data-pkg="models"' + (modal.pkg !== 'config' ? ' checked' : '') + '><label for="pkg-models">Configuration and available models (' + OURS.saved.length + ')</label></div>' +
+            '<div class="ck-row"><input type="radio" name="pkg" id="pkg-config" data-pkg="config"' + (modal.pkg === 'config' ? ' checked' : '') + '><label for="pkg-config">Configuration only</label></div>' +
+          '</div>' : '') +
         '</div>' +
         '<div class="mo-f"><div class="mo-f-row">' + btnSm('moCancel', 'Cancel', 'Close this dialog without downloading.', false, true) +
           btnSm('moDownload', 'Download', cfg ? (OURS.saved.length ? T.dlSome : T.dlNone) : 'Download the full instance package, including database and all models.') + '</div></div>' +
@@ -979,6 +983,7 @@ sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline;top:-.
     var t = e.target;
     if (t.id === 'download-database') { modal.db = t.checked; renderModal(); }
     else if (t.hasAttribute('data-model')) { modal.models[t.getAttribute('data-model')] = t.checked; renderModal(); }
+    else if (t.hasAttribute('data-pkg')) { modal.pkg = t.getAttribute('data-pkg'); renderModal(); }
   });
   document.addEventListener('click', function(e){
     var t = e.target;
