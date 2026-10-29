@@ -401,7 +401,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   'use strict';
 
   // ---------- ?mode=today|after (default after), ?state=, ?open=dialog ----------
-  var STATES = ['upload', 'uploaded', 'some-models', 'models', 'wrong-instance', 'missing-config', 'reupload-config', 'reupload-full'];
+  var STATES = ['upload', 'uploaded', 'some-models', 'models', 'wrong-instance', 'missing-config', 'reupload-config', 'reupload-full', 'duplicate-id'];
   var mode = 'after', state = 'upload', openParam = '';
   try {
     var qs = new URLSearchParams(location.search);
@@ -457,7 +457,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   var L2 = { id: '5c1e7a92-3f4b-4d8e-9a26-0b7f3c51e8d4', name: 'Line 2 Assembly', teamName: 'Team 1' };
   function L3() { var sh = readShared(); return { id: seedUuid(sh.instanceId), name: sh.instanceName, teamName: 'Team 1' }; }
   function inst(ref) { return ref === 'L3' ? L3() : L2; }
-  var REUPLOAD_DAY = state === 'reupload-config' || state === 'reupload-full';
+  var REUPLOAD_DAY = state === 'reupload-config' || state === 'reupload-full' || state === 'duplicate-id';
   var T = {
     l2Created: new Date(2026, 9, 14, 15, 33, 18).getTime(), l2Updated: new Date(2026, 9, 27, 11, 8, 42).getTime(),
     l2Reup: new Date(2026, 9, REUPLOAD_DAY ? 29 : 28, 9, 2, 16).getTime(),
@@ -469,7 +469,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
   function addL3Row(tagged, updatedAt) { rows.push({ ref: 'L3', createdAt: T.l3Created, updatedAt: updatedAt, tagged: tagged }); }
   // Line 3 on the box: Configuration only (tagged), or with some models (still tagged)
   if (state === 'uploaded' && mode === 'after') addL3Row(true, T.l3Cfg);
-  if (['some-models', 'wrong-instance', 'reupload-config', 'reupload-full'].indexOf(state) >= 0) addL3Row(mode === 'after', T.l3Cfg);
+  if (['some-models', 'wrong-instance', 'reupload-config', 'reupload-full', 'duplicate-id'].indexOf(state) >= 0) addL3Row(mode === 'after', T.l3Cfg);
   if (state === 'models') addL3Row(mode === 'after', T.l3Some);
   function rowOf(ref) { return rows.filter(function (r) { return r.ref === ref; })[0] || null; }
   function rowById(id) { return rows.filter(function (r) { return inst(r.ref).id === id; })[0] || null; }
@@ -487,13 +487,14 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     var seed = readShared().instanceId;
     return ['Part Presence', 'Label Text', 'Seal Bead', 'Surface Check'].map(function (m) { return seedUuid(seed + '/' + m); });
   }
-  // Ground truth changed on this Edge (EMC) after the first upload, in the re-upload states.
+  // Ground truth changed on this Edge (EMC) after the first upload, in the some-models and re-upload states.
   // Shape of a getPreservationDetails gtDiff (uploadValidation.ts:1060-1470), values via formatValue (InstanceTable.jsx:38-57).
   var GT_DIFFS = [
     ['Variant A', 'Front View', 'Part Presence', 'Bolt', 'groundTruth', '= 4', '= 2'],
     ['Variant A', 'Top View', 'Seal Bead', '-', 'gt_width', '14', '12']
   ];
-  function gtDiffsFor(p) { return REUPLOAD_DAY && p.ref === 'L3' && p.hasSql && rowById(p.instId) ? GT_DIFFS : null; }
+  var GT_CHANGED = state === 'some-models' || state === 'reupload-config' || state === 'reupload-full';
+  function gtDiffsFor(p) { return GT_CHANGED && p.ref === 'L3' && p.hasSql && rowById(p.instId) ? GT_DIFFS : null; }
 
   // ---------- Packages in ~/Downloads (Vision names them "<instanceId>_<ISO time>.zip": frinksvision-backend controller/instance.ts:321) ----------
   // kind: config = configuration, no models; some = configuration + some models; full = configuration + every model;
@@ -518,10 +519,10 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     'upload': ['l2full', 'l3cfg'], 'uploaded': ['l2full', 'l3cfg'],
     'some-models': ['l2full', 'l3cfg', 'l3some'],
     'models': ['l2full', 'l3cfg', 'l3some', 'l3models'], 'wrong-instance': ['l2full', 'l3cfg', 'l3some', 'l3models'], 'missing-config': ['l2full', 'l3cfg', 'l3some', 'l3models'],
-    'reupload-config': ['l2full', 'l3cfg', 'l3cfg2'], 'reupload-full': ['l2full', 'l3cfg', 'l3full']
+    'reupload-config': ['l2full', 'l3cfg', 'l3cfg2'], 'reupload-full': ['l2full', 'l3cfg', 'l3full'], 'duplicate-id': ['l2full', 'l3cfg', 'l3full']
   };
   var DEFAULT_FILE = { 'upload': 'l3cfg', 'uploaded': 'l3cfg', 'some-models': 'l3some', 'models': 'l3models', 'wrong-instance': 'l3models',
-    'missing-config': 'l3models', 'reupload-config': 'l3cfg2', 'reupload-full': 'l3full' };
+    'missing-config': 'l3models', 'reupload-config': 'l3cfg2', 'reupload-full': 'l3full', 'duplicate-id': 'l3full' };
   function filesForState() { return FILES[state]; }
   function defaultFile() { return DEFAULT_FILE[state]; }
   function modelsIn(p) { return p.key === 'l3some' ? SOME_MODELS : p.key === 'l3models' ? REST_MODELS : p.key === 'l3full' ? ALL_MODELS : null; }
@@ -550,6 +551,11 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     function done() { res.canProceed = errors.length === 0; return res; }
     function push(list) { list.forEach(function (w) { warnings.push(w); }); }
 
+    // After: instance IDs are unique on an Edge, so Add Instance refuses any package whose instance is already here.
+    if (mode === 'after' && !target && rowById(p.instId)) {
+      errors.push("'" + p.instName + "' is already on this Edge. Use Update in its row to upload this package.");
+      return done();
+    }
     if (mode === 'after' && p.ref === 'L3') {
       // Right-instance check first; the instance is found by the package's own id, never by "LIMIT 1".
       if (target && target.id !== p.instId) { errors.push("This package is for '" + p.instName + "', not '" + target.name + "'."); return done(); }
@@ -559,7 +565,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
       res.summary = [['Instance', p.instName + bracket]];
       if (p.kind === 'config') push([LOCKED_NONE]);
       if (p.kind === 'some') push([LOCKED_SOME]);
-      if (p.hasSql) push(onBox ? (p.kind === 'some' ? [] : REUPLOAD_W_AFTER) : NEW_INSTANCE_W);
+      if (p.hasSql) push(onBox ? REUPLOAD_W_AFTER : NEW_INSTANCE_W);
       res.models = modelsIn(p);
       res.gtDiffs = gtDiffsFor(p);
       return done();
@@ -940,7 +946,7 @@ a.sb-item:hover{background:rgb(255 255 255/.2)}
     if (openParam !== 'dialog') return;
     // [package, row whose Update is used (null = Add Instance), banner/hook]
     var OPEN = { 'upload': ['l3cfg', null, 'top'], 'some-models': ['l3some', 'L3', 'tbl'], 'models': ['l3models', 'L3', 'tbl'],
-      'reupload-config': ['l3cfg2', 'L3', 'tbl'], 'reupload-full': ['l3full', 'L3', 'tbl'] };
+      'reupload-config': ['l3cfg2', 'L3', 'tbl'], 'reupload-full': ['l3full', 'L3', 'tbl'], 'duplicate-id': ['l3full', null, 'top'] };
     var o = OPEN[state];
     if (!o || (o[1] && !rowOf(o[1]))) return;
     var r = validate(pkgs()[o[0]], o[1] ? inst(o[1]) : null);
